@@ -68,11 +68,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var lastSoundTime: Long = 0
     private val soundCooldown = 500L // Minimālais laiks starp skaņām (ms)
 
-    // Jutīguma līmeņi
-    private var shakingThreshold = 15f
-    private var swingThreshold = 8f
-    private var throwThreshold = 20f
-    private var dropThreshold = 5f
+    // Jutīguma līmeņi (balstīti uz reāliem ierakstītiem datiem)
+    private var scratchingThreshold = 8f      // Z-dominant bursts (avg acc: 2.3-3.0)
+    private var swingingThreshold = 1.5f       // Low steady motion (avg acc: 0.72)
+    private var throwThreshold = 15f           // Upward acceleration
+    private var dropThreshold = 20f            // High Z downward (max peaks: 20-85)
+    private var whooshThreshold = 3f           // X-dominant swing (avg acc: 1.2)
 
     // Kustību history detekcijai
     private val accelerationHistory = mutableListOf<Float>()
@@ -226,10 +227,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun setSensitivity(factor: Float) {
-        shakingThreshold = 15f * factor
-        swingThreshold = 8f * factor
-        throwThreshold = 20f * factor
-        dropThreshold = 5f * factor
+        scratchingThreshold = 8f * factor
+        swingingThreshold = 1.5f * factor
+        throwThreshold = 15f * factor
+        dropThreshold = 20f * factor
+        whooshThreshold = 3f * factor
     }
 
     override fun onResume() {
@@ -308,18 +310,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                             deltaX: Float, deltaY: Float, deltaZ: Float,
                             acceleration: Float, currentTime: Long) {
 
-        // 1. MEŠANA UZ AUGŠU (throw up) - strauja kustība uz augšu, tad brīvais kritiens
-        if (z > throwThreshold && abs(x) < 5 && abs(y) < 5) {
-            if (currentTime - lastSoundTime > soundCooldown) {
-                setMotionState(MotionState.THROWING, "Met uz augšu!")
-                playSound(ohoSoundId)
-                lastSoundTime = currentTime
-                return
-            }
-        }
+        // PRIORITY ORDER: Check most distinctive patterns first to avoid false positives
 
-        // 2. NOMEŠANA (drop) - strauja kustība uz leju
-        if (z < -dropThreshold && acceleration > 10) {
+        // 1. NOMEŠANA (dropping) - HIGH Z-delta downward + high total acceleration
+        // Based on data: deltaZ peaks 20-85, acceleration 20-85
+        if (deltaZ > dropThreshold && acceleration > dropThreshold) {
             if (currentTime - lastSoundTime > soundCooldown) {
                 setMotionState(MotionState.DROPPING, "Nokrīt!")
                 playSound(thudSoundId)
@@ -328,8 +323,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
-        // 3. ĀDAS KASĪŠANA (scratching) - ātras vertikālas kustības
-        if (deltaY > shakingThreshold && deltaX < 8 && deltaZ < 8) {
+        // 2. MEŠANA UZ AUGŠU (throwing) - rapid upward motion
+        // Check for strong negative Z (phone going up) with high acceleration
+        if (z < -throwThreshold && acceleration > throwThreshold) {
+            if (currentTime - lastSoundTime > soundCooldown) {
+                setMotionState(MotionState.THROWING, "Met uz augšu!")
+                playSound(ohoSoundId)
+                lastSoundTime = currentTime
+                return
+            }
+        }
+
+        // 3. ĀDAS KASĪŠANA (scratching) - Z-dominant bursts with mixed X/Y
+        // Based on data: acceleration 8-15 range, Z-dominant with X/Y movement
+        if (acceleration > scratchingThreshold && deltaZ > scratchingThreshold) {
             if (currentTime - lastSoundTime > soundCooldown) {
                 setMotionState(MotionState.SCRATCHING, "Kasa ādu")
                 playSound(scratchingSoundId)
@@ -338,18 +345,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
-        // 4. ŠŪPOLES (swinging) - ritmiskas horizontālas kustības ar vertikālu komponentu
-        if (isSwingingMotion(deltaX, deltaY, deltaZ)) {
-            if (currentTime - lastSoundTime > soundCooldown) {
-                setMotionState(MotionState.SWINGING, "Šūpojas")
-                playSound(swingingSoundId)
-                lastSoundTime = currentTime
-                return
-            }
-        }
-
-        // 5. ŠVĪKSTOŅA (whoosh) - šūpināšana ar īso malu
-        if (isWhooshingMotion(x, y, z, deltaX, deltaY, deltaZ)) {
+        // 4. ŠVĪKSTOŅA (whooshing) - X-dominant horizontal swing
+        // Based on data: deltaX 2-4, lower Z, acceleration 3-5
+        if (isWhooshingMotion(deltaX, deltaY, deltaZ, acceleration)) {
             if (currentTime - lastSoundTime > soundCooldown) {
                 setMotionState(MotionState.WHOOSHING, "Švīkst")
                 playSound(whooshSoundId)
@@ -358,25 +356,46 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
+        // 5. ŠŪPOLES (swinging) - LOW steady rhythmic motion
+        // Based on data: acceleration 0.7-2.4, gentle consistent movement
+        // Check LAST to avoid false positives (lowest threshold)
+        if (isSwingingMotion(acceleration, deltaX, deltaY, deltaZ)) {
+            if (currentTime - lastSoundTime > soundCooldown) {
+                setMotionState(MotionState.SWINGING, "Šūpojas")
+                playSound(swingingSoundId)
+                lastSoundTime = currentTime
+                return
+            }
+        }
+
         // Ja nav aktīvas kustības, atgriežas idle stāvoklī
-        if (acceleration < 2 && currentTime - lastSoundTime > 1000) {
+        if (acceleration < 0.5 && currentTime - lastSoundTime > 1000) {
             setMotionState(MotionState.IDLE, "Gaida kustību…")
         }
     }
 
-    private fun isSwingingMotion(deltaX: Float, deltaY: Float, deltaZ: Float): Boolean {
-        // Šūpoles: kombinācija no horizontālas un vertikālas kustības
-        val horizontalMotion = deltaX > swingThreshold
-        val verticalMotion = deltaY > swingThreshold / 2
-        return horizontalMotion && verticalMotion && deltaZ < swingThreshold
+    private fun isSwingingMotion(acceleration: Float, deltaX: Float,
+                                 deltaY: Float, deltaZ: Float): Boolean {
+        // Šūpoles: zema, PASTĀVĪGA kustība (avg 0.72, max 2.4)
+        // Galvenā iezīme: LOW acceleration bet consistent
+        val isLowSteadyMotion = acceleration > swingingThreshold && acceleration < 2.5f
+
+        // Jābūt kaut kādai kustībai visos virzienos (rhythmic)
+        val hasMovement = (deltaX > 0.3f || deltaY > 0.3f || deltaZ > 0.3f)
+
+        return isLowSteadyMotion && hasMovement
     }
 
-    private fun isWhooshingMotion(x: Float, y: Float, z: Float,
-                                   deltaX: Float, deltaY: Float, deltaZ: Float): Boolean {
-        // Švīkstoņa: ierīce ir vertikālā pozīcijā (x vai y dominē) un ātri šūpojas
-        val isVertical = abs(x) > 8 || abs(y) > 8
-        val isFastMotion = deltaX > 12 || deltaY > 12
-        return isVertical && isFastMotion
+    private fun isWhooshingMotion(deltaX: Float, deltaY: Float,
+                                   deltaZ: Float, acceleration: Float): Boolean {
+        // Švīkstoņa: X-DOMINANT horizontal swing (avg 1.2, max 4.7)
+        // Galvenā iezīme: X-ass dominē, vidēja acceleration
+        val isXDominant = deltaX > whooshThreshold && deltaX > deltaY && deltaX > deltaZ
+
+        // Acceleration range 3-5
+        val isCorrectAcceleration = acceleration > whooshThreshold && acceleration < 10f
+
+        return isXDominant && isCorrectAcceleration
     }
 
     private fun setMotionState(state: MotionState, statusText: String) {
