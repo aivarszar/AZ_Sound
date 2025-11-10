@@ -1,6 +1,8 @@
 package com.motionsounds.app
 
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -41,9 +43,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var exportButtonsLayout: LinearLayout
     private lateinit var exportJsonButton: MaterialButton
     private lateinit var exportCsvButton: MaterialButton
+    private lateinit var calibrateButton: MaterialButton
 
     // Motion Recorder
     private lateinit var motionRecorder: MotionRecorder
+    private lateinit var motionCalibrator: MotionCalibrator
     private var lastRecordedSession: RecordingSession? = null
 
     // Skaņu ID (tiks ielādēti no raw foldera)
@@ -96,9 +100,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         exportButtonsLayout = findViewById(R.id.exportButtonsLayout)
         exportJsonButton = findViewById(R.id.exportJsonButton)
         exportCsvButton = findViewById(R.id.exportCsvButton)
+        calibrateButton = findViewById(R.id.calibrateButton)
 
-        // Inicializē MotionRecorder
+        // Inicializē MotionRecorder un Calibrator
         motionRecorder = MotionRecorder(this)
+        motionCalibrator = MotionCalibrator(this)
+
+        // Ielādē kalibrētos parametrus
+        loadCalibratedParams()
 
         // Inicializē sensoru menedžeri
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -179,6 +188,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             lastRecordedSession?.let { session ->
                 motionRecorder.shareRecording(session, MotionRecorder.ExportFormat.CSV)
             }
+        }
+
+        // Calibrate Button
+        calibrateButton.setOnClickListener {
+            val intent = Intent(this, CalibrationActivity::class.java)
+            startActivityForResult(intent, CalibrationActivity.REQUEST_CODE_CALIBRATION)
         }
     }
 
@@ -428,6 +443,43 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 "X: %.2f  Y: %.2f  Z: %.2f",
                 x, y, z
             )
+        }
+    }
+
+    /**
+     * Ielādē kalibrētos parametrus no SharedPreferences
+     */
+    private fun loadCalibratedParams() {
+        motionCalibrator.loadConfig("SCRATCHING")?.let { config ->
+            scratchingThreshold = config.threshold
+        }
+
+        motionCalibrator.loadConfig("SWINGING")?.let { config ->
+            swingingThreshold = config.threshold
+        }
+
+        motionCalibrator.loadConfig("THROWING")?.let { config ->
+            throwThreshold = config.threshold
+        }
+
+        motionCalibrator.loadConfig("DROPPING")?.let { config ->
+            dropThreshold = config.threshold
+        }
+
+        motionCalibrator.loadConfig("WHOOSHING")?.let { config ->
+            whooshThreshold = config.threshold
+        }
+    }
+
+    /**
+     * Saņem rezultātu no CalibrationActivity
+     */
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == CalibrationActivity.REQUEST_CODE_CALIBRATION && resultCode == Activity.RESULT_OK) {
+            // Reload calibrated parameters
+            loadCalibratedParams()
         }
     }
 

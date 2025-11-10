@@ -24,6 +24,12 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".CalibrationActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:label="Kustību Kalibrācija"/>
+
         <!-- FileProvider for sharing files -->
         <provider
             android:name="androidx.core.content.FileProvider"
