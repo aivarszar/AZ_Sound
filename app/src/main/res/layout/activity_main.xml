@@ -177,6 +177,129 @@
 
     </com.google.android.material.card.MaterialCardView>
 
+    <!-- RECORDING SECTION -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/recordingCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="8dp"
+        app:cardBackgroundColor="@color/teal_200"
+        app:layout_constraintTop_toBottomOf="@id/controlCard"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="24dp">
+
+            <TextView
+                android:id="@+id/recordingLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📊 Datu Ierakstīšana"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@color/purple_700"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Izvēlies kustības tipu un ieraksti testus:"
+                android:textSize="12sp"
+                android:textColor="@color/purple_700"
+                android:layout_marginTop="4dp"/>
+
+            <!-- Motion Type Selector -->
+            <Spinner
+                android:id="@+id/motionTypeSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@android:drawable/btn_dropdown"
+                android:padding="12dp"/>
+
+            <!-- Recording Controls -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="16dp"
+                android:gravity="center">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/recordButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="▶️ Sākt"
+                    android:textSize="16sp"
+                    android:backgroundTint="@color/green"
+                    android:layout_marginEnd="8dp"/>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/stopButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="⏹️ Apturēt"
+                    android:textSize="16sp"
+                    android:backgroundTint="@color/red"
+                    android:enabled="false"/>
+
+            </LinearLayout>
+
+            <!-- Recording Status -->
+            <TextView
+                android:id="@+id/recordingStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Gatavs ierakstīšanai"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@color/purple_700"
+                android:layout_marginTop="12dp"
+                android:layout_gravity="center"/>
+
+            <!-- Export Buttons -->
+            <LinearLayout
+                android:id="@+id/exportButtonsLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="16dp"
+                android:visibility="gone">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/exportJsonButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="📄 JSON"
+                    android:textSize="14sp"
+                    android:backgroundTint="@color/purple_500"
+                    android:layout_marginEnd="8dp"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"/>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/exportCsvButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="📊 CSV"
+                    android:textSize="14sp"
+                    android:backgroundTint="@color/teal_700"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"/>
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
     <TextView
         android:id="@+id/motionHints"
         android:layout_width="match_parent"
@@ -185,10 +308,10 @@
         android:textSize="12sp"
         android:textColor="@color/purple_700"
         android:lineSpacingMultiplier="1.3"
-        app:layout_constraintTop_toBottomOf="@id/controlCard"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/recordingCard"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="16dp"/>
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="16dp"/>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -8,10 +8,17 @@ import android.hardware.SensorManager
 import android.media.AudioAttributes
 import android.media.SoundPool
 import android.os.Bundle
+import android.view.View
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.RadioGroup
+import android.widget.Spinner
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.google.android.material.button.MaterialButton
 import kotlin.math.abs
 import kotlin.math.sqrt
 
@@ -25,6 +32,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var motionStatusText: TextView
     private lateinit var accelerometerDataText: TextView
     private lateinit var sensitivityGroup: RadioGroup
+
+    // Recording UI elementi
+    private lateinit var motionTypeSpinner: Spinner
+    private lateinit var recordButton: MaterialButton
+    private lateinit var stopButton: MaterialButton
+    private lateinit var recordingStatusText: TextView
+    private lateinit var exportButtonsLayout: LinearLayout
+    private lateinit var exportJsonButton: MaterialButton
+    private lateinit var exportCsvButton: MaterialButton
+
+    // Motion Recorder
+    private lateinit var motionRecorder: MotionRecorder
+    private var lastRecordedSession: RecordingSession? = null
 
     // Skaņu ID (tiks ielādēti no raw foldera)
     private var scratchingSoundId: Int = 0
@@ -67,6 +87,18 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         accelerometerDataText = findViewById(R.id.accelerometerData)
         sensitivityGroup = findViewById(R.id.sensitivityGroup)
 
+        // Inicializē Recording UI elementus
+        motionTypeSpinner = findViewById(R.id.motionTypeSpinner)
+        recordButton = findViewById(R.id.recordButton)
+        stopButton = findViewById(R.id.stopButton)
+        recordingStatusText = findViewById(R.id.recordingStatus)
+        exportButtonsLayout = findViewById(R.id.exportButtonsLayout)
+        exportJsonButton = findViewById(R.id.exportJsonButton)
+        exportCsvButton = findViewById(R.id.exportCsvButton)
+
+        // Inicializē MotionRecorder
+        motionRecorder = MotionRecorder(this)
+
         // Inicializē sensoru menedžeri
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
@@ -93,6 +125,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 R.id.highSensitivity -> setSensitivity(1.5f)
             }
         }
+
+        // Setup Recording UI
+        setupRecordingUI()
     }
 
     private fun loadSounds() {
@@ -105,6 +140,89 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         thudSoundId = soundPool.load(this, R.raw.thud, 1)
         whooshSoundId = soundPool.load(this, R.raw.whoosh, 1)
         */
+    }
+
+    private fun setupRecordingUI() {
+        // Setup Motion Type Spinner
+        val motionTypes = arrayOf(
+            "SCRATCHING - Ādas kasīšana",
+            "SWINGING - Šūpoles",
+            "THROWING - OHO mešana",
+            "DROPPING - Būkšķis",
+            "WHOOSHING - Švīkstoņa"
+        )
+
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, motionTypes)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        motionTypeSpinner.adapter = adapter
+
+        // Record Button
+        recordButton.setOnClickListener {
+            startRecording()
+        }
+
+        // Stop Button
+        stopButton.setOnClickListener {
+            stopRecording()
+        }
+
+        // Export JSON Button
+        exportJsonButton.setOnClickListener {
+            lastRecordedSession?.let { session ->
+                motionRecorder.shareRecording(session, MotionRecorder.ExportFormat.JSON)
+            }
+        }
+
+        // Export CSV Button
+        exportCsvButton.setOnClickListener {
+            lastRecordedSession?.let { session ->
+                motionRecorder.shareRecording(session, MotionRecorder.ExportFormat.CSV)
+            }
+        }
+    }
+
+    private fun startRecording() {
+        val selectedMotionType = when (motionTypeSpinner.selectedItemPosition) {
+            0 -> "SCRATCHING"
+            1 -> "SWINGING"
+            2 -> "THROWING"
+            3 -> "DROPPING"
+            4 -> "WHOOSHING"
+            else -> "UNKNOWN"
+        }
+
+        val sensitivity = when (sensitivityGroup.checkedRadioButtonId) {
+            R.id.lowSensitivity -> "LOW"
+            R.id.highSensitivity -> "HIGH"
+            else -> "MEDIUM"
+        }
+
+        motionRecorder.startRecording(selectedMotionType, sensitivity)
+
+        // Update UI
+        recordButton.isEnabled = false
+        stopButton.isEnabled = true
+        exportButtonsLayout.visibility = View.GONE
+        recordingStatusText.text = "🔴 Ieraksta... Izpildi kustību 10 reizes!"
+        recordingStatusText.setTextColor(ContextCompat.getColor(this, R.color.red))
+    }
+
+    private fun stopRecording() {
+        val session = motionRecorder.stopRecording()
+        lastRecordedSession = session
+
+        // Update UI
+        recordButton.isEnabled = true
+        stopButton.isEnabled = false
+
+        session?.let {
+            exportButtonsLayout.visibility = View.VISIBLE
+            recordingStatusText.text = "✅ Ieraksts pabeigts!\n" +
+                    "Samples: ${it.getSampleCount()} | " +
+                    "Ilgums: ${it.getDuration()}ms | " +
+                    "Avg: ${"%.2f".format(it.getAverageAcceleration())}"
+            recordingStatusText.setTextColor(ContextCompat.getColor(this, R.color.green))
+        }
     }
 
     private fun setSensitivity(factor: Float) {
@@ -156,6 +274,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     accelerationHistory.add(acceleration)
                     if (accelerationHistory.size > maxHistorySize) {
                         accelerationHistory.removeAt(0)
+                    }
+
+                    // Ieraksta datus, ja recording režīmā
+                    if (motionRecorder.isRecording()) {
+                        motionRecorder.addSample(x, y, z, deltaX, deltaY, deltaZ, acceleration)
+
+                        // Atjaunina recording status ar sample count
+                        val session = motionRecorder.getCurrentSession()
+                        session?.let {
+                            runOnUiThread {
+                                recordingStatusText.text = "🔴 Ieraksta... Samples: ${it.getSampleCount()}"
+                            }
+                        }
                     }
 
                     // Detektē kustības
